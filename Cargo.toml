@@ -1,0 +1,10 @@
+[package]
+name = "doc_stuff"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+docx-rust = "=0.1.8"
+docx-parser = "0.1.1"
+pdf-inspector = "1"
+anyhow = "1.0"
