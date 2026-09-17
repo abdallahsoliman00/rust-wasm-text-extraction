@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>text-extraction wasm demo</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 720px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      color: #1a1a1a;
+    }
+    h1 {
+      font-size: 1.4rem;
+    }
+    .drop-zone {
+      border: 2px dashed #999;
+      border-radius: 8px;
+      padding: 2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.15s, background-color 0.15s;
+    }
+    .drop-zone.drag-over {
+      border-color: #2563eb;
+      background-color: #eff6ff;
+    }
+    .drop-zone p {
+      margin: 0.25rem 0;
+      color: #555;
+    }
+    input[type="file"] {
+      display: none;
+    }
+    #status {
+      margin-top: 1rem;
+      font-size: 0.9rem;
+      min-height: 1.2em;
+    }
+    #status.error {
+      color: #b91c1c;
+    }
+    #status.ok {
+      color: #15803d;
+    }
+    pre#output {
+      margin-top: 1rem;
+      padding: 1rem;
+      background: #f4f4f5;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 60vh;
+      overflow-y: auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>text-extraction: WASM demo</h1>
+  <p>
+    Drop a <code>.pdf</code> or <code>.docx</code> file below (or click to
+    choose one). It is read as bytes in the browser and passed directly into
+    the WebAssembly module &mdash; no upload to any server occurs.
+  </p>
+
+  <div id="drop-zone" class="drop-zone">
+    <p><strong>Drop file here</strong></p>
+    <p>or click to browse (.pdf, .docx)</p>
+    <input id="file-input" type="file" accept=".pdf,.docx" />
+  </div>
+
+  <div id="status"></div>
+  <pre id="output" hidden></pre>
+
+  <script type="module">
+    import init, { doc_to_markdown } from "./pkg/text_extraction.js";
+
+    const dropZone = document.getElementById("drop-zone");
+    const fileInput = document.getElementById("file-input");
+    const statusEl = document.getElementById("status");
+    const outputEl = document.getElementById("output");
+
+    let wasmReady = init().catch((err) => {
+      setStatus(`Failed to load WASM module: ${err}`, "error");
+      throw err;
+    });
+
+    function setStatus(message, kind) {
+      statusEl.textContent = message;
+      statusEl.className = kind || "";
+    }
+
+    async function handleFile(file) {
+      if (!file) return;
+
+      outputEl.hidden = true;
+      outputEl.textContent = "";
+      setStatus(`Reading "${file.name}"...`);
+
+      try {
+        await wasmReady;
+
+        const buffer = await file.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+
+        setStatus(`Extracting text from "${file.name}"...`);
+        const markdown = doc_to_markdown(file.name, bytes);
+
+        outputEl.textContent = markdown || "(no text extracted)";
+        outputEl.hidden = false;
+        setStatus(`Done: extracted ${markdown.length} characters from "${file.name}".`, "ok");
+      } catch (err) {
+        setStatus(`Error: ${err}`, "error");
+      }
+    }
+
+    dropZone.addEventListener("click", () => fileInput.click());
+
+    fileInput.addEventListener("change", () => {
+      handleFile(fileInput.files?.[0]);
+    });
+
+    ["dragenter", "dragover"].forEach((eventName) => {
+      dropZone.addEventListener(eventName, (event) => {
+        event.preventDefault();
+        dropZone.classList.add("drag-over");
+      });
+    });
+
+    ["dragleave", "drop"].forEach((eventName) => {
+      dropZone.addEventListener(eventName, (event) => {
+        event.preventDefault();
+        dropZone.classList.remove("drag-over");
+      });
+    });
+
+    dropZone.addEventListener("drop", (event) => {
+      const file = event.dataTransfer?.files?.[0];
+      handleFile(file);
+    });
+  </script>
+</body>
+</html>
